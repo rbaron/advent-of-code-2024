@@ -1,3 +1,5 @@
+#![feature(test)]
+extern crate test;
 use std::env::args;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -67,7 +69,7 @@ fn main() {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     fn is_safe2_brute_force(reports: &[i32]) -> bool {
@@ -100,4 +102,38 @@ mod test {
             assert_eq!(is_safe2(&report, 0), is_safe(&report));
         }
     }
+
+    #[bench]
+    fn bench_is_safe2(b: &mut test::Bencher) {
+        let reports = parse_reports("input.txt");
+        b.iter(|| {
+            for report in &reports {
+                is_safe2(report, 1);
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_is_safe2_brute_force(b: &mut test::Bencher) {
+        let reports = parse_reports("input.txt");
+        b.iter(|| {
+            for report in &reports {
+                is_safe2_brute_force(report);
+            }
+        });
+    }
+
+    /*
+    % cargo +nightly bench
+    Finished `bench` profile [optimized] target(s) in 0.00s
+     Running unittests src/main.rs (target/release/deps/day02-a6bf9c8219adcf75)
+
+    running 4 tests
+    test tests::test_is_safe2 ... ignored
+    test tests::test_is_safe2_equals_is_safe_for_budget_0 ... ignored
+    test tests::bench_is_safe2             ... bench:      41,052.86 ns/iter (+/- 3,485.45)
+    test tests::bench_is_safe2_brute_force ... bench:     416,149.49 ns/iter (+/- 28,620.15)
+
+    test result: ok. 0 passed; 0 failed; 2 ignored; 2 measured; 0 filtered out; finished in 4.81s
+    */
 }
