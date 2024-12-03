@@ -1,0 +1,5 @@
+input.txt
+input-test.txt
+
+# Ignore target from subdirectories.
+*/target/
