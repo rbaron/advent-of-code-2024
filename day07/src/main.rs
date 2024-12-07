@@ -1,29 +1,28 @@
 #[derive(Debug)]
 struct Test {
-    test_val: i64,
-    // Operands stored in reverse order.
-    operands: Vec<i64>,
+    test_val: u64,
+    // Operands stored in reverse order so I can evaluate the tail first and
+    // apply the original left-to-right eval order easily.
+    operands: Vec<u64>,
 }
 
-fn eval_operators(operands: &[i64]) -> Vec<i64> {
+fn eval_operators(operands: &[u64], use_concat: bool) -> Vec<u64> {
     match operands.split_first() {
         Some((head, tail)) => match tail.len() {
             0 => vec![*head],
             _ => {
                 let mut results = Vec::new();
-                for r in eval_operators(tail) {
+                for r in eval_operators(tail, use_concat) {
                     results.push(*head + r);
                     results.push(*head * r);
 
-                    let concat: i64 = (r.to_string() + &head.to_string())
-                        .to_owned()
-                        .parse()
-                        .unwrap();
-
-                    // let digits = (r as f64).log10().floor() as u32 + 1;
-                    // println!("digits: {}", digits);
-                    // let concat = r * 10_i64.pow(digits) + head;
-                    results.push(concat);
+                    if !use_concat {
+                        continue;
+                    }
+                    // Concat by multiplying the head by 10^(# head digits) and adding the head.
+                    let digits = (*head as f64).log10().floor() as u32 + 1;
+                    let concat = r * 10_u64.pow(digits) + *head;
+                    results.push(concat as u64);
                 }
 
                 results
@@ -59,13 +58,30 @@ fn main() {
     let sum1 = tests
         .iter()
         .map(|t| {
-            if eval_operators(&t.operands).iter().any(|x| *x == t.test_val) {
+            if eval_operators(&t.operands, /*use_concat=*/ false)
+                .iter()
+                .any(|x| *x == t.test_val)
+            {
                 t.test_val
             } else {
                 0
             }
         })
-        .sum::<i64>();
-
+        .sum::<u64>();
     println!("{}", sum1);
+
+    let sum2 = tests
+        .iter()
+        .map(|t| {
+            if eval_operators(&t.operands, /*use_concat=*/ true)
+                .iter()
+                .any(|x| *x == t.test_val)
+            {
+                t.test_val
+            } else {
+                0
+            }
+        })
+        .sum::<u64>();
+    println!("{}", sum2);
 }
