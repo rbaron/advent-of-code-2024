@@ -1,4 +1,8 @@
-use std::{collections::BinaryHeap, fmt::Binary, mem};
+use std::{
+    collections::{BinaryHeap, HashSet},
+    fmt::Binary,
+    mem,
+};
 
 #[derive(PartialEq, Eq, Debug)]
 struct MemBlk {
@@ -19,10 +23,10 @@ impl PartialOrd for MemBlk {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 struct File {
-    pos: usize,
     id: u32,
+    pos: usize,
     size: usize,
 }
 
@@ -66,6 +70,42 @@ fn checksum(files: &[File]) -> u64 {
     })
 }
 
+fn defrag(blks: &mut BinaryHeap<MemBlk>) {
+    if blks.is_empty() {
+        return;
+    }
+    let mut new_blks = BinaryHeap::new();
+
+    let mut blk = blks.pop().unwrap();
+
+    while let Some(mut next_blk) = blks.pop() {
+        if blk.pos + blk.len == next_blk.pos {
+            blk.len += next_blk.len;
+        } else {
+            new_blks.push(blk);
+            blk = next_blk;
+        }
+
+        if blks.is_empty() {
+            new_blks.push(blk);
+            break;
+        }
+    }
+
+    for blk in new_blks {
+        blks.push(blk);
+    }
+    // blks = new_blks;
+    // mem::swap(&mut &blks, &mut new_blks);
+    // mem::replace(&mut blks, &mut new_blks);
+
+    // blks = new_blks;
+
+    // move new_blks into blks;
+    // mem::swap(&mut blks, &mut new_blks);
+    // *&mut blks = &mut *new_blks;
+}
+
 fn main() {
     let contents = std::fs::read_to_string(std::env::args().nth(1).expect("Missing filename"))
         .expect("Failed to read file");
@@ -74,68 +114,57 @@ fn main() {
     let mut final_files = BinaryHeap::new();
 
     // Get last file.
-    while let Some(mut file) = files.pop() {
-        // println!("File {:?}", file);
+    'outer: while let Some(mut file) = files.pop() {
+        // println!("File {} {:?}", file.id, file);
         // println!("MemBlks {:?}", memblks);
 
         // Get first mem block.
-        match memblks.pop() {
-            Some(memblk) => {
-                if memblk.pos >= file.pos {
-                    final_files.push(file);
-                    memblks.push(memblk);
-                    continue;
+        // match memblks.pop() {
+        let mut new_blks = BinaryHeap::new();
+        while let Some(memblk) = memblks.pop() {
+            // Some(memblk) => {
+            if memblk.pos >= file.pos {
+                final_files.push(file);
+                new_blks.push(memblk);
+                for blk in new_blks {
+                    memblks.push(blk);
                 }
-                // If file fits in memory block.
-                if file.size <= memblk.len {
-                    let new_blk = MemBlk {
-                        pos: memblk.pos + file.size,
-                        len: memblk.len - file.size,
-                    };
-                    file.pos = memblk.pos;
-                    final_files.push(file);
-                    if new_blk.len > 0 {
-                        memblks.push(new_blk);
-                    }
-                } else if file.size > memblk.len {
-                    // If file does not fit in memory block.
-                    let remaining_file = File {
-                        id: file.id,
-                        // pos: file.pos + memblk.len,
-                        // Trick: we shift the file to the right by the size of the moved chunk.
-                        pos: file.pos,
-                        size: file.size - memblk.len,
-                    };
-                    file.size = memblk.len;
-                    file.pos = memblk.pos;
-                    final_files.push(file);
-                    files.push(remaining_file);
-                    // final_files.push(file);
-                    // memblks.push(memblk);
-                }
+                defrag(&mut memblks);
+                continue 'outer;
             }
-            None => {
-                // panic!("OOM");
-                // return final_files;
-                break;
+
+            // If file fits in memory block.
+            if file.size <= memblk.len {
+                // println!(
+                //     "File {} fits in memory block starting at {}",
+                //     file.id, memblk.pos
+                // );
+                let new_blk = MemBlk {
+                    pos: memblk.pos + file.size,
+                    len: memblk.len - file.size,
+                };
+                file.pos = memblk.pos;
+                final_files.push(file);
+                if new_blk.len > 0 {
+                    new_blks.push(new_blk);
+                }
+                for blk in new_blks {
+                    memblks.push(blk);
+                }
+                continue 'outer;
+            } else if file.size > memblk.len {
+                // println!(
+                //     "File {} does not fit in memory block starting at {}",
+                //     file.id, memblk.pos
+                // );
+                new_blks.push(memblk);
             }
         }
-
-        // break;
-        // let mut memblk = memblks.pop().expect("Not enough memory");
-        // if file.size > memblk.len {
-        //     println!("File {} does not fit in memory", file.id);
-        //     continue;
-        // }
-        // println!(
-        //     "File {} fits in memory block starting at {}",
-        //     file.id, memblk.start
-        // );
-        // if file.size < memblk.len {
-        //     memblk.start += file.size;
-        //     memblk.len -= file.size;
-        //     memblks.push(memblk);
-        // }
+        // If we reach here, we have not found a memory block that fits the file.
+        final_files.push(file.clone());
+        for blk in new_blks {
+            memblks.push(blk);
+        }
     }
 
     // println!("Remaining files: {:?}", files);
@@ -143,8 +172,20 @@ fn main() {
     //     final_files.push(file);
     //     // println!("File {:?}", file);
     // }
+    let mut v = final_files.into_sorted_vec();
+    // v.sort_by(|a, b| a.pos.cmp(&b.pos));
+    // let mut pos = 0;
+    // for file in &v {
+    //     for i in pos..file.pos {
+    //         print!(".");
+    //     }
+    //     pos = file.pos + file.size;
+    //     for i in file.pos..(file.pos + file.size) {
+    //         print!("{}", file.id);
+    //     }
+    // }
 
-    let cs = checksum(&final_files.into_sorted_vec());
+    let cs = checksum(&v);
     println!("Checksum: {}", cs);
 }
 
@@ -238,6 +279,20 @@ mod tests {
         assert_eq!(
             memblks.into_sorted_vec(),
             vec![MemBlk { pos: 6, len: 4 }, MemBlk { pos: 1, len: 2 },]
+        );
+    }
+
+    #[test]
+    fn test_defrag() {
+        let mut blks = BinaryHeap::from([
+            MemBlk { pos: 10, len: 5 },
+            MemBlk { pos: 15, len: 2 },
+            MemBlk { pos: 19, len: 4 },
+        ]);
+        defrag(&mut blks);
+        assert_eq!(
+            blks.into_sorted_vec(),
+            vec![MemBlk { pos: 19, len: 4 }, MemBlk { pos: 10, len: 7 }]
         );
     }
 }
