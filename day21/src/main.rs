@@ -8,6 +8,7 @@ use std::{
     char,
     collections::{HashMap, HashSet},
     hash::Hash,
+    i32,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -198,18 +199,76 @@ fn main() {
         // let moves2 = vec![moves2.iter().min_by_key(|m| m.len()).unwrap()];
         let l = moves2.iter().map(|m| m.len()).min().unwrap();
 
-        let moves3: Vec<Moves> = moves2
+        // let blks: Vec<Vec<Vec<Moves>>> = moves2
+        //     .iter()
+        //     .map(|m| {
+        //         m.iter()
+        //             .cloned()
+        //             .collect::<Vec<char>>()
+        //             .split(|&c| c == 'A')
+        //             .map(|s| s.to_vec())
+        //             .collect()
+        //     })
+        //     .collect();
+        let blks: Vec<Vec<Moves>> = moves2
             .iter()
-            .filter(|m| m.len() == l)
-            .flat_map(|m| get_moves(m, 'A', &ROBOT, &ROBOT_ALLOWED, &mut HashMap::new()))
+            .map(|m| {
+                m.iter()
+                    .cloned()
+                    .collect::<Vec<char>>()
+                    .split(|&c| c == 'A')
+                    .map(|s| s.to_vec())
+                    .collect()
+            })
             .collect();
-        println!("{:?}", moves3.len());
 
-        let shortest = moves3.iter().min_by_key(|m| m.len()).unwrap();
-        println!("{:?} {:?}", input, shortest.len());
-        println!("{:?} {:?}", input, shortest.iter().collect::<String>());
+        // for blk in blks.iter() {
+        //     for m in blk.iter() {
+        //         println!("{:?} {:?}", m.len(), m);
+        //     }
+        //     println!();
+        // }
 
-        res += (input[..input.len() - 1].parse::<i32>().unwrap() * shortest.len() as i32);
+        let mut cache: HashMap<String, i32> = HashMap::new();
+        let mut min = i32::MAX;
+        for blk in blks.iter().unique() {
+            let mut size = 0;
+            for m in blk.iter() {
+                let key = m.iter().collect::<String>();
+                if cache.contains_key(&key) {
+                    size += cache.get(&key).unwrap();
+                    // println!("skip {:?}", key);
+                    continue;
+                }
+                let mut c = m.clone();
+                c.push('A');
+                let moves = get_moves(&c, 'A', &ROBOT, &ROBOT_ALLOWED, &mut HashMap::new());
+                let shortest = moves.iter().min_by_key(|m| m.len()).unwrap();
+                let val = shortest.len() as i32;
+                cache.insert(key, val);
+                size += val;
+            }
+            if size < min {
+                min = size;
+            }
+        }
+
+        println!("MIN {:?}", min - 1);
+
+        // let moves3: Vec<Moves> = moves2
+        //     .iter()
+        //     .filter(|m| m.len() == l)
+        //     .flat_map(|m| get_moves(m, 'A', &ROBOT, &ROBOT_ALLOWED, &mut HashMap::new()))
+        //     .collect();
+        // println!("{:?}", moves3.len());
+
+        // let shortest = moves3.iter().min_by_key(|m| m.len()).unwrap();
+        // println!("{:?} {:?}", input, shortest.len());
+        // println!("{:?} {:?}", input, shortest.iter().collect::<String>());
+        // break;
+
+        // res += (input[..input.len() - 1].parse::<i32>().unwrap() * shortest.len() as i32);
+        res += (input[..input.len() - 1].parse::<i32>().unwrap() * (min - 1) as i32);
     }
-    println!("{}", res);
+    println!("RES {}", res);
 }
