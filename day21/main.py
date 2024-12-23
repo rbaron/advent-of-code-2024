@@ -1,6 +1,8 @@
 import fileinput
+from frozendict import frozendict
 from collections import deque
 from functools import cache
+import itertools
 
 KEYPAD = {
     (0, 0): "7",
@@ -73,6 +75,25 @@ def all_moves(_from, rest, paths):
     return cacheable(_from, rest)
 
 
+def find_shortest(_from, to, level, paths):
+    @cache
+    def find_dp(_from, to, level):
+        if level == 0:
+            # return f'{_from}{to}'
+            return 1
+
+        shortest = float("Inf")
+        for moves in all_moves(_from, (to,), paths):
+            total = 0
+            for f1, t1 in itertools.pairwise(["A"] + moves):
+                # print(f"{_from=} {to=}")
+                total += find_dp(f1, t1, level - 1)
+            shortest = min(total, shortest)
+        return shortest
+
+    return find_dp(_from, to, level)
+
+
 def run(moves, times, paths):
     for i in range(times):
         moves = [m for move in moves for m in all_moves("A", tuple(move), paths)]
@@ -80,17 +101,21 @@ def run(moves, times, paths):
 
 
 def main():
-    KEYPAD_PATHS = {
-        (KEYPAD[p1], KEYPAD[p2]): all_shortest_paths(p1, p2, KEYPAD)
-        for p1 in KEYPAD
-        for p2 in KEYPAD
-    }
+    KEYPAD_PATHS = frozendict(
+        {
+            (KEYPAD[p1], KEYPAD[p2]): all_shortest_paths(p1, p2, KEYPAD)
+            for p1 in KEYPAD
+            for p2 in KEYPAD
+        }
+    )
 
-    DIRPAD_PATHS = {
-        (DIRPAD[p1], DIRPAD[p2]): all_shortest_paths(p1, p2, DIRPAD)
-        for p1 in DIRPAD
-        for p2 in DIRPAD
-    }
+    DIRPAD_PATHS = frozendict(
+        {
+            (DIRPAD[p1], DIRPAD[p2]): all_shortest_paths(p1, p2, DIRPAD)
+            for p1 in DIRPAD
+            for p2 in DIRPAD
+        }
+    )
 
     # print(DIRPAD_PATHS)
     # ms = all_moves("A", "029A", KEYPAD_PATHS)
@@ -98,24 +123,40 @@ def main():
     #     print(m)
 
     # m = "<A^A>^^AvvvA"
+    pt1 = 0
+    for digits in fileinput.input():
+        # Level 1 move.
+        moves = all_moves("A", digits.strip(), KEYPAD_PATHS)
+
+        shortest = float("Inf")
+        for move in moves:
+            total = 0
+            for _from, to in itertools.pairwise(["A"] + move):
+                # total += find_shortest(_from, to, 2, DIRPAD_PATHS)
+                total += find_shortest(_from, to, 25, DIRPAD_PATHS)
+            shortest = min(total, shortest)
+        pt1 += shortest * int(digits.strip()[:-1])
+
+    print(pt1)
+
     # # m = "v<<A>>^A<A>AvA<^AA>A<vAAA>^A"
     # ms = all_moves("A", m, DIRPAD_PATHS)
     # print("ms", ms)
     # for m in ms:
     #     print(len(m), "".join(m))
 
-    total = 0
-    for digits in fileinput.input():
-        moves = all_moves("A", digits.strip(), KEYPAD_PATHS)
+    # total = 0
+    # for digits in fileinput.input():
+    #     moves = all_moves("A", digits.strip(), KEYPAD_PATHS)
 
-        # I think we can be smarter here. Note that each
-        # "block" of moves always start and end at A. Maybe
-        # we can cache that all the way down?
-        moves = run(tuple(moves), 2, DIRPAD_PATHS)
-        l = min([len(m) for m in moves])
-        total += l * int(digits.strip()[:-1])
+    #     # I think we can be smarter here. Note that each
+    #     # "block" of moves always start and end at A. Maybe
+    #     # we can cache that all the way down?
+    #     moves = run(tuple(moves), 2, DIRPAD_PATHS)
+    #     l = min([len(m) for m in moves])
+    #     total += l * int(digits.strip()[:-1])
 
-    print(total)
+    # print(total)
 
 
 main()
